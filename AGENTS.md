@@ -12,6 +12,15 @@ SQL Analyser deterministically extracts a source data model from a single SQL st
 - **Jinja2** — rendering templates (Mermaid ERD, DBML)
 - **pytest** — testing
 
+## Issue management and tracking
+This project uses a CLI ticket system for task management. Run `tk help` when you need to use it.
+
+**Important:** After completing a task, always update the corresponding ticket status to `closed` using the `tk` command.
+
+## Feature Specfications
+Feature specifications live in features/XX-feature-name/ where XX is increasing numbers like 01, 02. Typically we write a PRD.md (use best practices). After I have reviewed it, I will ask you to break down the PRD into a detailed TODO.md plan in the same directory.  This should contain all the tasks necessary to complete the feature. After creating the TODO, we should also create tickets (`tk --help`) to track the work. Tickets should be as complete as possible, with Acceptance Criteria, and have the dependencies linked.
+
+
 ## Module Layout
 
 ```
@@ -148,6 +157,8 @@ uv run pytest
 - Use **fixtures** in `conftest.py` for shared parsed ASTs — do not repeat SQL parsing in every test.
 - Test both the happy path and edge cases (self-joins, `SELECT *`, nested CTEs, correlated subqueries).
 - Assert on domain model objects, not string output. Rendering tests are separate.
+
+**Critical:** After completing any implementation task, you MUST run all tests using `uv run pytest`. If test failures occur, you MUST NOT SKIP or ignore them. All test failures must be resolved before considering the task complete.
 
 ## Common Pitfalls
 
