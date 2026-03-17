@@ -16,29 +16,29 @@ SQL Analyser deterministically extracts a source data model from a single SQL st
 
 ```
 src/sql_analyser/
-├── __init__.py          # public API: analyse() entry point
-├── models.py            # Pydantic domain classes: DataModel, QueriedTable, QueriedColumn, Relationship
-├── analyser.py          # core analysis: scope traversal, table/column extraction, type inference
-├── relationships.py     # relationship extraction from JOIN and WHERE conditions
+├── __init__.py          # public API: analyse() + re-exports of domain classes
+├── domain.py            # Pydantic domain classes, enums, and merge logic
+├── analyser.py          # scope traversal, base table resolution, column extraction,
+│                        #   relationship extraction (JOIN + WHERE), type inference
 ├── lineage.py           # output column lineage tracking
 ├── metrics.py           # complexity metrics computation
-├── merge.py             # DataModel and QueriedTable merging logic
 └── templates/           # Jinja2 templates
     ├── mermaid_erd.j2
     └── dbml.j2
 
 tests/
-├── conftest.py          # shared fixtures (parsed ASTs for test SQL)
-├── test_models.py       # domain model serialisation, merge rules
-├── test_analyser.py     # core extraction (FR-001, FR-005, FR-006, FR-008)
-├── test_relationships.py # relationship extraction (FR-002)
-├── test_lineage.py      # column lineage (FR-007)
-├── test_metrics.py      # complexity metrics (FR-004)
-├── test_merge.py        # model merging (FR-009)
-└── test_rendering.py    # Mermaid ERD and DBML output (FR-003)
+├── conftest.py               # shared fixtures (parsed ASTs for test SQL)
+├── test_domain_model.py      # domain classes, serialisation, merge logic (FR-009)
+├── test_source_data_model.py  # table/column extraction (FR-001, FR-005, FR-006, FR-008)
+├── test_relationships.py      # relationship extraction (FR-002)
+├── test_lineage.py            # column lineage (FR-007)
+├── test_metrics.py            # complexity metrics (FR-004)
+└── test_rendering.py          # Mermaid ERD and DBML output (FR-003)
 ```
 
 > This is the target layout. Create modules as needed when implementing each feature — do not create empty placeholder files.
+>
+> **Consolidation rationale:** Merge logic is tightly coupled to domain classes, so `domain.py` co-locates both. Table/column extraction and relationship extraction share the same scope traversal loop and alias resolution, so `analyser.py` handles both.
 
 ## Analysis Pipeline
 
@@ -92,16 +92,14 @@ Features have dependencies. Implement in this order:
 
 | Phase | FRs | What to Build | Depends On |
 |---|---|---|---|
-| 1 — Domain model | — | `models.py`: Pydantic classes, JSON serialisation, `__eq__`/`__hash__` | Nothing |
-| 2 — Core extraction | FR-001 | `analyser.py`: scope traversal, base table resolution, column extraction from all clauses | Phase 1 |
-| 3 — Relationships | FR-002 | `relationships.py`: JOIN and WHERE implicit join extraction | Phase 2 |
-| 4 — Rendering | FR-003 | `templates/`, rendering methods on DataModel | Phases 2–3 |
-| 5 — Metrics | FR-004 | `metrics.py`: AST node count, scope count | Phase 2 |
-| 6 — Type inference | FR-005 | Type inference logic in `analyser.py` | Phase 2 |
-| 7 — Classification | FR-006 | Measure/dimension/attribute classification | Phase 2 |
-| 8 — Lineage | FR-007 | `lineage.py`: output column → source mapping | Phase 2 |
-| 9 — Wildcards | FR-008 | `SELECT *` detection and flagging | Phase 2 |
-| 10 — Merging | FR-009 | `merge.py`: DataModel and QueriedTable merging | Phase 1 |
+| 1 — Domain model | FR-009 | `domain.py`: Pydantic classes, enums, JSON serialisation, merge logic | Nothing |
+| 2 — Core extraction | FR-001, FR-008 | `analyser.py`: scope traversal, base table resolution, column extraction from all clauses, wildcard detection | Phase 1 |
+| 3 — Relationships | FR-002 | Extend `analyser.py`: JOIN and WHERE implicit join extraction within the scope loop | Phase 2 |
+| 4 — Metrics | FR-004 | `metrics.py`: AST node count, scope count | Phase 2 |
+| 5 — Type inference | FR-005 | Type inference logic in `analyser.py` | Phase 2 |
+| 6 — Classification | FR-006 | Measure/dimension/attribute classification | Phase 2 |
+| 7 — Lineage | FR-007 | `lineage.py`: output column → source mapping | Phase 2 |
+| 8 — Rendering | FR-003 | `templates/`, rendering methods on DataModel | Phases 2–3 |
 
 Individual features will have PRD documents in a `docs/prds/` directory. When a PRD exists for a feature, treat it as the source of truth over the spec for that feature's details.
 
@@ -124,14 +122,21 @@ Individual features will have PRD documents in a `docs/prds/` directory. When a 
 
 ## Domain Model
 
-| Class | Key Fields |
-|---|---|
-| `DataModel` | tables, relationships |
-| `QueriedTable` | name (fully-qualified), columns, has_wildcard |
-| `QueriedColumn` | name, data_type, usage context |
-| `Relationship` | left table+columns, right table+columns |
+All classes are Pydantic models defined in `domain.py`, serialisable to/from JSON.
 
-All classes are Pydantic models, serialisable to/from JSON.
+| Class | Key Fields | Notes |
+|---|---|---|
+| `ColumnUsage` | StrEnum: `SELECT`, `WHERE`, `HAVING`, `ORDER_BY`, `GROUP_BY`, `JOIN_ON` | Tracks which SQL clause a column was referenced in |
+| `ColumnClassification` | StrEnum: `MEASURE`, `DIMENSION`, `ATTRIBUTE` | Output column classification |
+| `QueriedColumn` | name, data_type (`"varchar"` default), usages (`set[ColumnUsage]`) | |
+| `QueriedTable` | name, schema_name, catalog_name, columns, has_wildcard | `qualified_name` property joins non-empty parts with `"."` |
+| `Relationship` | left_table, left_columns, right_table, right_columns | `canonical_key` property for symmetric deduplication |
+| `DataModel` | tables, relationships | `merge(other)` method for combining models |
+| `OutputColumn` | alias, source_table, source_column, transforms, classification | Column lineage tracking |
+| `ComplexityMetrics` | node_count, scope_count, scope_types | AST complexity |
+| `AnalysisResult` | data_model, output_columns, metrics | Top-level wrapper |
+
+`QueriedTable` stores namespace parts separately (`name`, `schema_name`, `catalog_name`) mirroring sqlglot's `exp.Table` properties (`name`, `db`, `catalog`). The `qualified_name` computed property provides the dotted string (e.g. `"core_facts.orders"`) used for merge matching and Relationship references.
 
 ## Testing
 
@@ -155,4 +160,5 @@ uv run pytest
 ## Reference
 
 - Full specification: [SQL-ANALYSER-SPEC.md](SQL-ANALYSER-SPEC.md)
+- Domain model & module plan: [docs/DOMAIN-MODEL-PLAN.md](docs/DOMAIN-MODEL-PLAN.md)
 - Feature PRDs (when available): `docs/prds/`
