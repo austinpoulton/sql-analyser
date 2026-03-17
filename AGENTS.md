@@ -20,6 +20,18 @@ This project uses a CLI ticket system for task management. Run `tk help` when yo
 ## Feature Specfications
 Feature specifications live in features/XX-feature-name/ where XX is increasing numbers like 01, 02. Typically we write a PRD.md (use best practices). After I have reviewed it, I will ask you to break down the PRD into a detailed TODO.md plan in the same directory.  This should contain all the tasks necessary to complete the feature. After creating the TODO, we should also create tickets (`tk --help`) to track the work. Tickets should be as complete as possible, with Acceptance Criteria, and have the dependencies linked.
 
+## Feature Branch Workflow
+
+**Critical:** For each new feature, you MUST:
+
+1. Create a feature branch from `main` using the naming convention `feature/XX-feature-name` (matching the feature directory name)
+2. Set up git commit hooks on the feature branch to enforce code quality:
+   - Pre-commit hook must run linting checks
+   - Pre-commit hook must run all tests (`uv run pytest`)
+   - Commits should be blocked if either linting or tests fail
+3. Work on all feature implementation in the feature branch
+4. Only merge to `main` after all tests pass and the feature is complete
+
 
 ## Module Layout
 
