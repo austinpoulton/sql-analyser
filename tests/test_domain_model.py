@@ -307,9 +307,7 @@ class TestJSONSerialisation:
                 classification=ColumnClassification.DIMENSION,
             )
         ]
-        metrics = ComplexityMetrics(
-            node_count=10, scope_count=1, scope_types=["ROOT"]
-        )
+        metrics = ComplexityMetrics(node_count=10, scope_count=1, scope_types=["ROOT"])
         result = AnalysisResult(
             data_model=model, output_columns=output_cols, metrics=metrics
         )
@@ -359,12 +357,8 @@ class TestMergeColumns:
 
     def test_merge_usage_union(self):
         """TC-DOMAIN-08: Usage sets are unioned."""
-        col1 = QueriedColumn(
-            name="id", usages={ColumnUsage.SELECT, ColumnUsage.WHERE}
-        )
-        col2 = QueriedColumn(
-            name="id", usages={ColumnUsage.WHERE, ColumnUsage.JOIN_ON}
-        )
+        col1 = QueriedColumn(name="id", usages={ColumnUsage.SELECT, ColumnUsage.WHERE})
+        col2 = QueriedColumn(name="id", usages={ColumnUsage.WHERE, ColumnUsage.JOIN_ON})
         result = merge_columns(col1, col2)
         assert result.usages == {
             ColumnUsage.SELECT,
