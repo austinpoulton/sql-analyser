@@ -214,9 +214,10 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
                         catalog_name=source.catalog or "",
                     )
                     logger.debug(f"Registered table {qn}")
-            # elif isinstance(source, Scope):
-            #     # This is a CTE or subquery - skip, handled by child scope
-            #     pass
+            elif isinstance(source, Scope):
+                # This is a CTE or subquery - skip, handled by child scope
+                logger.debug(f"Skipping CTE/subquery: {alias}")
+                pass
 
         # Extract columns from all SQL clauses
         clause_map: dict[ColumnUsage, exp.Expression | list[exp.Expression] | None] = {

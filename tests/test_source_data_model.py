@@ -176,3 +176,83 @@ def test_multiple_usages(multiple_usages):
     # region appears in: WHERE
     assert "region" in cols
     assert ColumnUsage.WHERE in cols["region"].usages
+
+
+# Phase 2C: CTE and Subquery handling
+
+
+def test_simple_cte(simple_cte):
+    """TC-001-07: Extract base table from simple CTE."""
+    result = analyse(simple_cte)
+
+    # Verify only base table extracted, not CTE alias
+    assert len(result.data_model.tables) == 1
+    table = result.data_model.tables[0]
+    assert table.name == "orders"
+
+    # Verify column attributed to base table
+    assert len(table.columns) == 1
+    col = table.columns[0]
+    assert col.name == "order_id"
+    # Column appears in both the CTE's SELECT and outer SELECT
+    assert ColumnUsage.SELECT in col.usages
+
+
+def test_nested_cte(nested_cte):
+    """TC-001-08: Extract base table from nested CTEs (3 levels)."""
+    result = analyse(nested_cte)
+
+    # Verify only base table extracted, not any CTE aliases
+    assert len(result.data_model.tables) == 1
+    table = result.data_model.tables[0]
+    assert table.name == "users"
+
+    # Verify column extracted
+    # Note: The WHERE in cte2 references cte1 (a CTE), so those columns are skipped
+    # We only capture the initial SELECT from the base table
+    cols = {col.name: col for col in table.columns}
+    assert "id" in cols
+    id_usages = cols["id"].usages
+    assert ColumnUsage.SELECT in id_usages
+    # The WHERE clause in cte2 references cte1, not the base table,
+    # so it's correctly excluded
+
+
+def test_nested_subquery(nested_subquery):
+    """TC-001-09: Extract base table from deeply nested subqueries."""
+    result = analyse(nested_subquery)
+
+    # Verify only base table extracted
+    assert len(result.data_model.tables) == 1
+    table = result.data_model.tables[0]
+    assert table.name == "t1"
+
+    # Verify column
+    assert len(table.columns) == 1
+    col = table.columns[0]
+    assert col.name == "a"
+    assert ColumnUsage.SELECT in col.usages
+
+
+def test_correlated_subquery(correlated_subquery):
+    """Test correlated subquery with outer scope reference."""
+    result = analyse(correlated_subquery)
+
+    # Verify both tables extracted
+    assert len(result.data_model.tables) == 2
+    tables_by_name = {t.name: t for t in result.data_model.tables}
+    assert "orders" in tables_by_name
+    assert "order_items" in tables_by_name
+
+    # Verify orders columns
+    orders = tables_by_name["orders"]
+    orders_cols = {col.name: col for col in orders.columns}
+    assert "id" in orders_cols
+    # o.id appears in outer SELECT and in the WHERE of the subquery
+    assert ColumnUsage.SELECT in orders_cols["id"].usages
+
+    # Verify order_items columns
+    order_items = tables_by_name["order_items"]
+    order_items_cols = {col.name: col for col in order_items.columns}
+    assert "order_id" in order_items_cols
+    assert ColumnUsage.WHERE in order_items_cols["order_id"].usages

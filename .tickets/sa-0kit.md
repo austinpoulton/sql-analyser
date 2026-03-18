@@ -1,6 +1,6 @@
 ---
 id: sa-0kit
-status: open
+status: closed
 deps: [sa-vtdu]
 links: []
 created: 2026-03-18T14:59:45Z
