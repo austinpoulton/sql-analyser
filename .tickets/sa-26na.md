@@ -1,6 +1,6 @@
 ---
 id: sa-26na
-status: open
+status: closed
 deps: [sa-vgh8]
 links: []
 created: 2026-03-18T14:59:27Z
