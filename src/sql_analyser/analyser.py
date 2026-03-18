@@ -54,28 +54,6 @@ def build_qualified_name(
     return ".".join(parts)
 
 
-def _enumerate_scopes(expression: exp.Expression) -> list[Scope]:
-    """Enumerate all scopes in the expression in post-order.
-
-    Post-order traversal ensures that inner scopes (CTEs, subqueries) are
-    processed before their containing scopes. This is critical for correctly
-    resolving CTE references and attributing columns to base tables.
-
-    Args:
-        expression: The parsed SQL expression to analyze.
-
-    Returns:
-        A list of Scope objects in post-order (innermost first, root last).
-
-    Examples:
-        For "WITH cte AS (SELECT * FROM t1) SELECT * FROM cte",
-        the CTE scope is returned before the outer SELECT scope.
-    """
-    scopes = list(traverse_scope(expression))
-    logger.debug(f"Found {len(scopes)} scopes")
-    return scopes
-
-
 def _walk_in_scope(
     node: exp.Expression | None, node_type: type[exp.Expression]
 ) -> list[exp.Expression]:
@@ -210,8 +188,10 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
     # Initialize data structures
     table_registry: dict[str, QueriedTable] = {}
 
-    # Step 1: Enumerate scopes in post-order
-    scopes = _enumerate_scopes(expression)
+    # Step 1: Enumerate scopes in post-order (innermost first)
+    # This ensures CTEs/subqueries are processed before their containing scopes
+    scopes = list(traverse_scope(expression))
+    logger.debug(f"Found {len(scopes)} scopes")
 
     # Step 2: Process each scope
     for scope in scopes:
