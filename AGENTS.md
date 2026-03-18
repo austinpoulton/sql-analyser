@@ -111,16 +111,16 @@ sqlglot.Expression (input)
 
 Features have dependencies. Implement in this order:
 
-| Phase | FRs | What to Build | Depends On |
-|---|---|---|---|
-| 1 — Domain model | FR-009 | `domain.py`: Pydantic classes, enums, JSON serialisation, merge logic | Nothing |
-| 2 — Core extraction | FR-001, FR-008 | `analyser.py`: scope traversal, base table resolution, column extraction from all clauses, wildcard detection | Phase 1 |
-| 3 — Relationships | FR-002 | Extend `analyser.py`: JOIN and WHERE implicit join extraction within the scope loop | Phase 2 |
-| 4 — Metrics | FR-004 | `metrics.py`: AST node count, scope count | Phase 2 |
-| 5 — Type inference | FR-005 | Type inference logic in `analyser.py` | Phase 2 |
-| 6 — Classification | FR-006 | Measure/dimension/attribute classification | Phase 2 |
-| 7 — Lineage | FR-007 | `lineage.py`: output column → source mapping | Phase 2 |
-| 8 — Rendering | FR-003 | `templates/`, rendering methods on DataModel | Phases 2–3 |
+| Phase | Status | FRs | What to Build | Depends On |
+|---|---|---|---|---|
+| 1 — Domain model | ✅ Complete | FR-009 | `domain.py`: Pydantic classes, enums, JSON serialisation, merge logic | Nothing |
+| 2 — Core extraction | 🚧 In Progress | FR-001, FR-008 | `analyser.py`: scope traversal, base table resolution, column extraction from all clauses, wildcard detection | Phase 1 |
+| 3 — Relationships | Planned | FR-002 | Extend `analyser.py`: JOIN and WHERE implicit join extraction within the scope loop | Phase 2 |
+| 4 — Metrics | Planned | FR-004 | `metrics.py`: AST node count, scope count | Phase 2 |
+| 5 — Type inference | Planned | FR-005 | Type inference logic in `analyser.py` | Phase 2 |
+| 6 — Classification | Planned | FR-006 | Measure/dimension/attribute classification | Phase 2 |
+| 7 — Lineage | Planned | FR-007 | `lineage.py`: output column → source mapping | Phase 2 |
+| 8 — Rendering | Planned | FR-003 | `templates/`, rendering methods on DataModel | Phases 2–3 |
 
 Individual features will have PRD documents in a `docs/prds/` directory. When a PRD exists for a feature, treat it as the source of truth over the spec for that feature's details.
 
