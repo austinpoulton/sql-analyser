@@ -1,6 +1,6 @@
 ---
 id: sa-bofw
-status: open
+status: closed
 deps: [sa-59aj]
 links: []
 created: 2026-03-17T14:53:35Z

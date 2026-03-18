@@ -1,6 +1,6 @@
 ---
 id: sa-1vk3
-status: open
+status: closed
 deps: [sa-0nnp]
 links: []
 created: 2026-03-17T14:52:59Z

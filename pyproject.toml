@@ -26,3 +26,9 @@ packages = ["src/sql_analyser"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pytest-cov>=7.0.0",
+]

@@ -1,6 +1,6 @@
 ---
 id: sa-45rz
-status: open
+status: closed
 deps: [sa-bofw]
 links: []
 created: 2026-03-17T14:53:35Z
