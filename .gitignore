@@ -9,3 +9,4 @@ __pycache__/
 *.env
 .pytest_cache/
 .coverage.claude/worktrees/
+local-test.ipynb

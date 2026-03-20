@@ -1,6 +1,6 @@
 ---
 id: sa-qdjl
-status: open
+status: closed
 deps: [sa-0kit]
 links: []
 created: 2026-03-18T14:59:56Z

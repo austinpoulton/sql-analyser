@@ -1,6 +1,6 @@
 ---
 id: sa-sev6
-status: open
+status: closed
 deps: [sa-rfd5]
 links: []
 created: 2026-03-18T15:00:57Z

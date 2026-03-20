@@ -1,6 +1,6 @@
 ---
 id: sa-p7wb
-status: open
+status: closed
 deps: [sa-xabo]
 links: []
 created: 2026-03-18T15:00:27Z

@@ -114,7 +114,7 @@ Features have dependencies. Implement in this order:
 | Phase | Status | FRs | What to Build | Depends On |
 |---|---|---|---|---|
 | 1 — Domain model | ✅ Complete | FR-009 | `domain.py`: Pydantic classes, enums, JSON serialisation, merge logic | Nothing |
-| 2 — Core extraction | 🚧 In Progress | FR-001, FR-008 | `analyser.py`: scope traversal, base table resolution, column extraction from all clauses, wildcard detection | Phase 1 |
+| 2 — Core extraction | ✅ Complete | FR-001, FR-008 | `analyser.py`: scope traversal, base table resolution, column extraction from all clauses, wildcard detection | Phase 1 |
 | 3 — Relationships | Planned | FR-002 | Extend `analyser.py`: JOIN and WHERE implicit join extraction within the scope loop | Phase 2 |
 | 4 — Metrics | Planned | FR-004 | `metrics.py`: AST node count, scope count | Phase 2 |
 | 5 — Type inference | Planned | FR-005 | Type inference logic in `analyser.py` | Phase 2 |

@@ -7,6 +7,7 @@ dependencies = [
     "sqlglot>=26",
     "pydantic>=2",
     "jinja2>=3",
+    "notebook>=7.5.5",
 ]
 
 [project.optional-dependencies]

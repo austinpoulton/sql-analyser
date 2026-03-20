@@ -256,3 +256,208 @@ def test_correlated_subquery(correlated_subquery):
     order_items_cols = {col.name: col for col in order_items.columns}
     assert "order_id" in order_items_cols
     assert ColumnUsage.WHERE in order_items_cols["order_id"].usages
+
+
+# Phase 2D: Wildcard detection
+
+
+def test_unqualified_wildcard(unqualified_wildcard):
+    """TC-008-01: Unqualified SELECT * flags table with wildcard.
+
+    Verifies:
+    - Table is extracted
+    - has_wildcard flag is set to True
+    - No columns are invented
+    """
+    result = analyse(unqualified_wildcard)
+
+    # Verify one table extracted
+    assert len(result.data_model.tables) == 1
+    table = result.data_model.tables[0]
+
+    # Verify table properties
+    assert table.name == "products"
+    assert table.has_wildcard is True
+
+    # No columns should be invented for wildcard
+    assert len(table.columns) == 0
+
+
+def test_qualified_wildcard(qualified_wildcard):
+    """TC-008-02: Qualified SELECT table.* flags only that table.
+
+    Verifies:
+    - Both tables extracted
+    - Only table1 has wildcard flag set
+    - table2 has explicit column extracted
+    - table2 wildcard flag is False
+    """
+    result = analyse(qualified_wildcard)
+
+    # Verify both tables extracted
+    assert len(result.data_model.tables) == 2
+    tables_by_name = {t.name: t for t in result.data_model.tables}
+    assert "table1" in tables_by_name
+    assert "table2" in tables_by_name
+
+    # Verify table1 has wildcard flag
+    table1 = tables_by_name["table1"]
+    assert table1.has_wildcard is True
+    assert len(table1.columns) == 0  # No explicit columns from t1
+
+    # Verify table2 does NOT have wildcard flag and has explicit column
+    table2 = tables_by_name["table2"]
+    assert table2.has_wildcard is False
+    assert len(table2.columns) == 1
+    assert table2.columns[0].name == "id"
+    assert ColumnUsage.SELECT in table2.columns[0].usages
+
+
+def test_wildcard_with_explicit_columns(wildcard_with_columns):
+    """TC-008-03: Wildcard with explicit columns.
+
+    Verifies:
+    - has_wildcard flag is set
+    - Explicit columns are still extracted
+    - Columns from WHERE clause are captured
+    """
+    result = analyse(wildcard_with_columns)
+
+    # Verify one table extracted
+    assert len(result.data_model.tables) == 1
+    table = result.data_model.tables[0]
+
+    # Verify table properties
+    assert table.name == "orders"
+    assert table.has_wildcard is True
+
+    # Verify explicit columns are extracted
+    assert len(table.columns) == 2
+    cols_by_name = {col.name: col for col in table.columns}
+    assert "status" in cols_by_name
+    assert "region" in cols_by_name
+
+    # Verify usages
+    assert ColumnUsage.SELECT in cols_by_name["status"].usages
+    assert ColumnUsage.WHERE in cols_by_name["region"].usages
+
+
+# Phase 2E: Edge cases
+
+
+def test_self_join(self_join):
+    """TC-001-10: Self-join with same table, different aliases.
+
+    Verifies:
+    - Single table in output (no duplicates)
+    - Columns from both aliases are merged
+    - Usages accumulated correctly
+    """
+    result = analyse(self_join)
+
+    # Verify only one table extracted
+    assert len(result.data_model.tables) == 1
+    table = result.data_model.tables[0]
+
+    # Verify table name
+    assert table.name == "users"
+
+    # Verify columns
+    cols_by_name = {col.name: col for col in table.columns}
+    assert "id" in cols_by_name
+    assert "manager_id" in cols_by_name
+
+    # Verify usages
+    # id appears in both SELECT (a.id, b.id) and JOIN_ON (b.id)
+    assert ColumnUsage.SELECT in cols_by_name["id"].usages
+    assert ColumnUsage.JOIN_ON in cols_by_name["id"].usages
+
+    # manager_id appears in JOIN_ON (a.manager_id)
+    assert ColumnUsage.JOIN_ON in cols_by_name["manager_id"].usages
+
+
+def test_union_query(union_query):
+    """Test UNION query with multiple SELECT arms.
+
+    Verifies:
+    - Both tables extracted
+    - Columns from both arms captured
+    - Post-order traversal handles UNION scopes
+    """
+    result = analyse(union_query)
+
+    # Verify both tables extracted
+    assert len(result.data_model.tables) == 2
+    tables_by_name = {t.name: t for t in result.data_model.tables}
+    assert "orders" in tables_by_name
+    assert "archived_orders" in tables_by_name
+
+    # Verify both have column "id" with SELECT usage
+    orders = tables_by_name["orders"]
+    assert len(orders.columns) == 1
+    assert orders.columns[0].name == "id"
+    assert ColumnUsage.SELECT in orders.columns[0].usages
+
+    archived_orders = tables_by_name["archived_orders"]
+    assert len(archived_orders.columns) == 1
+    assert archived_orders.columns[0].name == "id"
+    assert ColumnUsage.SELECT in archived_orders.columns[0].usages
+
+
+def test_complex_integration(complex_integration):
+    """Integration test with CTE, JOIN, multiple clauses.
+
+    Verifies:
+    - CTE is resolved to base tables
+    - Multiple base tables extracted
+    - Columns from all clauses captured
+    - All usages accumulated correctly
+    """
+    result = analyse(complex_integration)
+
+    # Verify tables extracted (no CTE alias)
+    assert len(result.data_model.tables) == 2
+    tables_by_name = {t.name: t for t in result.data_model.tables}
+    assert "sales" in tables_by_name
+    assert "products" in tables_by_name
+    assert "regional_sales" not in tables_by_name  # CTE should not appear
+
+    # Verify sales table columns
+    sales = tables_by_name["sales"]
+    sales_cols = {col.name: col for col in sales.columns}
+
+    # Expected columns: region, product_id, amount, year
+    assert "region" in sales_cols
+    assert "product_id" in sales_cols
+    assert "amount" in sales_cols
+    assert "year" in sales_cols
+
+    # Verify usages for sales columns
+    # region: SELECT, GROUP_BY
+    assert ColumnUsage.SELECT in sales_cols["region"].usages
+    assert ColumnUsage.GROUP_BY in sales_cols["region"].usages
+
+    # product_id: SELECT, GROUP_BY
+    assert ColumnUsage.SELECT in sales_cols["product_id"].usages
+    assert ColumnUsage.GROUP_BY in sales_cols["product_id"].usages
+
+    # amount: SELECT (inside SUM aggregate)
+    assert ColumnUsage.SELECT in sales_cols["amount"].usages
+
+    # year: WHERE
+    assert ColumnUsage.WHERE in sales_cols["year"].usages
+
+    # Verify products table columns
+    products = tables_by_name["products"]
+    products_cols = {col.name: col for col in products.columns}
+
+    # Expected columns: id, name
+    assert "id" in products_cols
+    assert "name" in products_cols
+
+    # Verify usages for products columns
+    # id: JOIN_ON
+    assert ColumnUsage.JOIN_ON in products_cols["id"].usages
+
+    # name: SELECT
+    assert ColumnUsage.SELECT in products_cols["name"].usages

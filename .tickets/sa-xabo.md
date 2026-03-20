@@ -1,6 +1,6 @@
 ---
 id: sa-xabo
-status: open
+status: closed
 deps: [sa-gkyx]
 links: []
 created: 2026-03-18T15:00:14Z

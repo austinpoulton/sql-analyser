@@ -7,6 +7,7 @@ and their relationships from a parsed SQL AST using sqlglot's scope analysis.
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 import sqlglot.expressions as exp
 from sqlglot.optimizer.scope import Scope, traverse_scope
@@ -239,48 +240,91 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
             # Handle SELECT clause (list of expressions)
             if usage == ColumnUsage.SELECT and isinstance(clause_node, list):
                 for select_expr in clause_node:
+                    # Skip Star expressions (handled separately in wildcard detection)
+                    if isinstance(select_expr, exp.Star):
+                        continue
+
+                    # Skip Column expressions where this is a Star (qualified wildcards)
+                    if isinstance(select_expr, exp.Column) and isinstance(
+                        select_expr.this, exp.Star
+                    ):
+                        continue
+
                     columns = _walk_in_scope(select_expr, exp.Column)
                     for column in columns:
-                        table_alias = column.table if hasattr(column, "table") else ""
-                        column_name = (
-                            column.name if hasattr(column, "name") else str(column)
+                        table_alias = str(
+                            column.table if hasattr(column, "table") else ""
+                        )
+                        column_name = str(
+                            column.name if hasattr(column, "name") else column
                         )
 
                         qn = _resolve_alias(table_alias, scope, alias_to_qualified)
-                        if qn and qn in table_registry:
+                        if qn is not None and qn in table_registry:
                             _add_or_update_column(
                                 table_registry[qn], column_name, usage
                             )
             else:
                 # Handle other clauses (single node)
-                columns = _walk_in_scope(clause_node, exp.Column)
-                for column in columns:
-                    table_alias = column.table if hasattr(column, "table") else ""
-                    column_name = (
-                        column.name if hasattr(column, "name") else str(column)
-                    )
+                if not isinstance(clause_node, list):
+                    columns = _walk_in_scope(clause_node, exp.Column)
+                    for column in columns:
+                        table_alias = str(
+                            column.table if hasattr(column, "table") else ""
+                        )
+                        column_name = str(
+                            column.name if hasattr(column, "name") else column
+                        )
 
-                    qn = _resolve_alias(table_alias, scope, alias_to_qualified)
-                    if qn and qn in table_registry:
-                        _add_or_update_column(table_registry[qn], column_name, usage)
+                        qn = _resolve_alias(table_alias, scope, alias_to_qualified)
+                        if qn is not None and qn in table_registry:
+                            _add_or_update_column(
+                                table_registry[qn], column_name, usage
+                            )
 
         # Handle JOIN ON clauses separately
-        joins = _walk_in_scope(scope.expression, exp.Join)
+        joins = _walk_in_scope(cast(exp.Expression, scope.expression), exp.Join)
         for join in joins:
             on_condition = join.args.get("on") if hasattr(join, "args") else None
             if on_condition:
                 columns = _walk_in_scope(on_condition, exp.Column)
                 for column in columns:
-                    table_alias = column.table if hasattr(column, "table") else ""
-                    column_name = (
-                        column.name if hasattr(column, "name") else str(column)
+                    table_alias = str(column.table if hasattr(column, "table") else "")
+                    column_name = str(
+                        column.name if hasattr(column, "name") else column
                     )
 
                     qn = _resolve_alias(table_alias, scope, alias_to_qualified)
-                    if qn and qn in table_registry:
+                    if qn is not None and qn in table_registry:
                         _add_or_update_column(
                             table_registry[qn], column_name, ColumnUsage.JOIN_ON
                         )
+
+        # Handle wildcard detection (SELECT * or table.*)
+        # Check SELECT expressions for Star nodes
+        if hasattr(scope.expression, "expressions"):
+            for select_expr in scope.expression.expressions:
+                # Unqualified SELECT * (bare Star node)
+                if isinstance(select_expr, exp.Star):
+                    logger.debug(
+                        "Found unqualified SELECT * - flagging all base tables"
+                    )
+                    for qn in alias_to_qualified.values():
+                        if qn in table_registry:
+                            table_registry[qn].has_wildcard = True
+                            logger.debug(f"Flagged {qn} with wildcard")
+
+                # Qualified SELECT table.* (Column with Star as this)
+                elif isinstance(select_expr, exp.Column) and isinstance(
+                    select_expr.this, exp.Star
+                ):
+                    star_table = str(
+                        select_expr.table if hasattr(select_expr, "table") else ""
+                    )
+                    qn = _resolve_alias(star_table, scope, alias_to_qualified)
+                    if qn is not None and qn in table_registry:
+                        table_registry[qn].has_wildcard = True
+                        logger.debug(f"Flagged {qn} with qualified wildcard")
 
     # Step 3: Compose DataModel
     data_model = DataModel(

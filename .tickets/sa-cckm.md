@@ -1,6 +1,6 @@
 ---
 id: sa-cckm
-status: open
+status: closed
 deps: [sa-vytn]
 links: []
 created: 2026-03-18T15:01:18Z

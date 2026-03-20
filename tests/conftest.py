@@ -153,3 +153,98 @@ def correlated_subquery():
         "WHERE EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id)",
         dialect="postgres",
     )
+
+
+# Phase 2D: Wildcard detection
+
+
+@pytest.fixture
+def unqualified_wildcard():
+    """TC-008-01: Unqualified SELECT *.
+
+    SQL: SELECT * FROM products
+    """
+    return sqlglot.parse_one("SELECT * FROM products", dialect="postgres")
+
+
+@pytest.fixture
+def qualified_wildcard():
+    """TC-008-02: Qualified SELECT table.*.
+
+    SQL: SELECT t1.*, t2.id FROM table1 t1, table2 t2
+    """
+    return sqlglot.parse_one(
+        "SELECT t1.*, t2.id FROM table1 t1, table2 t2", dialect="postgres"
+    )
+
+
+@pytest.fixture
+def wildcard_with_columns():
+    """TC-008-03: Wildcard with explicit columns.
+
+    SQL: SELECT *, status FROM orders WHERE region = 'US'
+    """
+    return sqlglot.parse_one(
+        "SELECT *, status FROM orders WHERE region = 'US'", dialect="postgres"
+    )
+
+
+# Phase 2E: Edge cases
+
+
+@pytest.fixture
+def self_join():
+    """TC-001-10: Self-join with same table, different aliases.
+
+    SQL: SELECT a.id, b.id FROM users a JOIN users b ON a.manager_id = b.id
+    """
+    return sqlglot.parse_one(
+        "SELECT a.id, b.id FROM users a JOIN users b ON a.manager_id = b.id",
+        dialect="postgres",
+    )
+
+
+@pytest.fixture
+def union_query():
+    """UNION query with multiple SELECT arms.
+
+    SQL: SELECT id FROM orders UNION SELECT id FROM archived_orders
+    """
+    return sqlglot.parse_one(
+        "SELECT id FROM orders UNION SELECT id FROM archived_orders",
+        dialect="postgres",
+    )
+
+
+@pytest.fixture
+def complex_integration():
+    """Complex integration test combining multiple features.
+
+    SQL: WITH regional_sales AS (
+           SELECT region, product_id, SUM(amount) as total
+           FROM sales
+           WHERE year = 2023
+           GROUP BY region, product_id
+         )
+         SELECT rs.region, p.name, rs.total
+         FROM regional_sales rs
+         JOIN products p ON rs.product_id = p.id
+         WHERE rs.total > 1000
+         ORDER BY rs.total DESC
+    """
+    return sqlglot.parse_one(
+        """
+        WITH regional_sales AS (
+          SELECT region, product_id, SUM(amount) as total
+          FROM sales
+          WHERE year = 2023
+          GROUP BY region, product_id
+        )
+        SELECT rs.region, p.name, rs.total
+        FROM regional_sales rs
+        JOIN products p ON rs.product_id = p.id
+        WHERE rs.total > 1000
+        ORDER BY rs.total DESC
+        """,
+        dialect="postgres",
+    )

@@ -1,6 +1,6 @@
 ---
 id: sa-gkyx
-status: open
+status: closed
 deps: [sa-qdjl]
 links: []
 created: 2026-03-18T15:00:05Z

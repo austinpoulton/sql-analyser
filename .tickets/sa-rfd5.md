@@ -1,6 +1,6 @@
 ---
 id: sa-rfd5
-status: open
+status: closed
 deps: [sa-p7wb]
 links: []
 created: 2026-03-18T15:00:42Z
