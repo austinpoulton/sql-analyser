@@ -248,3 +248,76 @@ def complex_integration():
         """,
         dialect="postgres",
     )
+
+
+# Phase 3: Relationship extraction fixtures
+
+
+@pytest.fixture
+def single_column_join():
+    """TC-002-01: Single-column explicit JOIN.
+
+    SQL: SELECT o.id, c.name FROM orders o JOIN customers c ON o.customer_id = c.id
+    """
+    return sqlglot.parse_one(
+        "SELECT o.id, c.name FROM orders o JOIN customers c ON o.customer_id = c.id",
+        dialect="postgres",
+    )
+
+
+@pytest.fixture
+def multi_column_join():
+    """TC-002-02: Multi-column JOIN.
+
+    SQL: SELECT * FROM orders o
+         JOIN shipments s ON o.region = s.region AND o.order_id = s.order_id
+    """
+    return sqlglot.parse_one(
+        "SELECT * FROM orders o "
+        "JOIN shipments s ON o.region = s.region AND o.order_id = s.order_id",
+        dialect="postgres",
+    )
+
+
+@pytest.fixture
+def implicit_where_join():
+    """TC-002-03: Implicit WHERE join.
+
+    SQL: SELECT o.id, c.name FROM orders o, customers c WHERE o.customer_id = c.id
+    """
+    return sqlglot.parse_one(
+        "SELECT o.id, c.name FROM orders o, customers c WHERE o.customer_id = c.id",
+        dialect="postgres",
+    )
+
+
+@pytest.fixture
+def multiple_joins():
+    """TC-002-04: Multiple JOINs (chain).
+
+    SQL: SELECT o.id, c.name, p.name FROM orders o
+         JOIN customers c ON o.customer_id = c.id
+         JOIN products p ON o.product_id = p.id
+    """
+    return sqlglot.parse_one(
+        "SELECT o.id, c.name, p.name FROM orders o "
+        "JOIN customers c ON o.customer_id = c.id "
+        "JOIN products p ON o.product_id = p.id",
+        dialect="postgres",
+    )
+
+
+@pytest.fixture
+def union_with_duplicate_join():
+    """TC-002-07: Relationship deduplication.
+
+    SQL: SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id
+         UNION
+         SELECT * FROM orders o2 JOIN customers c2 ON o2.customer_id = c2.id
+    """
+    return sqlglot.parse_one(
+        "SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id "
+        "UNION "
+        "SELECT * FROM orders o2 JOIN customers c2 ON o2.customer_id = c2.id",
+        dialect="postgres",
+    )
