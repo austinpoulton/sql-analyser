@@ -8,4 +8,5 @@ __pycache__/
 *.log
 *.env
 .pytest_cache/
-.coverage
+.coverage.claude/worktrees/
+local-test.ipynb

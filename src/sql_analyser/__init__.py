@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .analyser import analyse
 from .domain import (
     AnalysisResult,
     ColumnClassification,
@@ -17,6 +18,7 @@ from .domain import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "analyse",
     "AnalysisResult",
     "ColumnClassification",
     "ColumnUsage",
