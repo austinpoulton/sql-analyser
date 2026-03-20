@@ -7,8 +7,6 @@ and CTE resolution.
 
 from __future__ import annotations
 
-import pytest
-
 from sql_analyser import analyse
 
 
@@ -164,10 +162,23 @@ def test_relationship_deduplication(union_with_duplicate_join):
 # Phase 3B: CTE resolution
 
 
-@pytest.mark.skip(reason="Phase 3B not yet implemented")
 def test_cte_join(cte_join):
     """TC-002-05: Resolve CTE in JOIN to base table.
 
     Verifies CTE aliases are resolved to base tables in relationships.
     """
-    pass  # Will implement in Phase 3B
+    result = analyse(cte_join)
+
+    # Should resolve tmp → orders
+    assert len(result.data_model.relationships) == 1
+    rel = result.data_model.relationships[0]
+
+    # Verify tables (CTE should be resolved to base table)
+    tables = {rel.left_table, rel.right_table}
+    assert "orders" in tables
+    assert "products" in tables
+    assert "tmp" not in tables  # CTE should not appear
+
+    # Verify columns
+    all_cols = set(rel.left_columns + rel.right_columns)
+    assert "order_id" in all_cols

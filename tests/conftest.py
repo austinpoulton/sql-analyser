@@ -321,3 +321,23 @@ def union_with_duplicate_join():
         "SELECT * FROM orders o2 JOIN customers c2 ON o2.customer_id = c2.id",
         dialect="postgres",
     )
+
+
+@pytest.fixture
+def cte_join():
+    """TC-002-05: CTE JOIN with resolution to base table.
+
+    SQL: WITH tmp AS (SELECT order_id, total FROM orders)
+         SELECT t.order_id, p.name
+         FROM tmp t
+         JOIN products p ON t.order_id = p.order_id
+    """
+    return sqlglot.parse_one(
+        """
+        WITH tmp AS (SELECT order_id, total FROM orders)
+        SELECT t.order_id, p.name
+        FROM tmp t
+        JOIN products p ON t.order_id = p.order_id
+        """,
+        dialect="postgres",
+    )

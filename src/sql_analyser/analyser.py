@@ -121,6 +121,78 @@ def _resolve_alias(alias: str, scope: Scope, alias_map: dict[str, str]) -> str |
     return None
 
 
+def _resolve_cte_to_base_tables(
+    cte_alias: str, scope: Scope, visited: set[str] | None = None
+) -> set[str]:
+    """Resolve a CTE alias to its base table(s) recursively.
+
+    Args:
+        cte_alias: The CTE alias to resolve.
+        scope: The current scope containing source information.
+        visited: Set of CTE aliases already visited (for cycle detection).
+
+    Returns:
+        A set of qualified base table names that the CTE references.
+        Empty set if the CTE cannot be resolved.
+
+    Resolution algorithm:
+        1. Look up the CTE alias in scope.sources
+        2. If it's not a Scope (CTE), return empty set
+        3. Walk the CTE's scope to find all base tables it references
+        4. For nested CTEs, recursively resolve them
+        5. Return the union of all base tables
+
+    Examples:
+        >>> _resolve_cte_to_base_tables("tmp", scope, set())
+        {'orders'}
+        >>> _resolve_cte_to_base_tables("nested", scope, set())
+        {'orders', 'customers'}  # nested CTE referencing multiple tables
+    """
+    if visited is None:
+        visited = set()
+
+    # Cycle detection
+    if cte_alias in visited:
+        logger.warning(f"Circular CTE reference detected: {cte_alias}")
+        return set()
+
+    visited.add(cte_alias)
+
+    # Look up the CTE in scope.sources
+    if cte_alias not in scope.sources:
+        logger.debug(f"CTE alias not found in scope: {cte_alias}")
+        return set()
+
+    source = scope.sources[cte_alias]
+    if not isinstance(source, Scope):
+        # Not a CTE/subquery, this shouldn't happen in normal flow
+        logger.debug(f"{cte_alias} is not a CTE (not a Scope)")
+        return set()
+
+    # Traverse the CTE's scope to find base tables
+    cte_scope = source
+    base_tables: set[str] = set()
+
+    # Build alias map for the CTE's scope
+    for alias, cte_source in cte_scope.sources.items():
+        if isinstance(cte_source, exp.Table):
+            # Direct base table reference
+            qn = build_qualified_name(
+                cte_source.name, cte_source.db or None, cte_source.catalog or None
+            )
+            base_tables.add(qn)
+            logger.debug(f"CTE {cte_alias} references base table {qn}")
+        elif isinstance(cte_source, Scope):
+            # Nested CTE - recursively resolve
+            nested_tables = _resolve_cte_to_base_tables(alias, scope, visited)
+            base_tables.update(nested_tables)
+            logger.debug(
+                f"CTE {cte_alias} references nested CTE {alias} → {nested_tables}"
+            )
+
+    return base_tables
+
+
 def _add_or_update_column(
     table: QueriedTable, column_name: str, usage: ColumnUsage
 ) -> None:
@@ -367,14 +439,35 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
                         right_table_alias, scope, alias_to_qualified
                     )
 
-                    # Accumulate column pairs by table pair
-                    if left_qn is not None and right_qn is not None:
-                        key = (left_qn, right_qn)
-                        if key not in table_pair_map:
-                            table_pair_map[key] = []
-                        table_pair_map[key].append(
-                            (str(eq.left.name), str(eq.right.name))
+                    # If alias resolution failed, try CTE resolution
+                    left_tables: set[str] = set()
+                    right_tables: set[str] = set()
+
+                    if left_qn is not None:
+                        left_tables.add(left_qn)
+                    else:
+                        # Try to resolve as CTE
+                        left_tables = _resolve_cte_to_base_tables(
+                            left_table_alias, scope
                         )
+
+                    if right_qn is not None:
+                        right_tables.add(right_qn)
+                    else:
+                        # Try to resolve as CTE
+                        right_tables = _resolve_cte_to_base_tables(
+                            right_table_alias, scope
+                        )
+
+                    # Accumulate column pairs for all base table combinations
+                    for left_base in left_tables:
+                        for right_base in right_tables:
+                            key = (left_base, right_base)
+                            if key not in table_pair_map:
+                                table_pair_map[key] = []
+                            table_pair_map[key].append(
+                                (str(eq.left.name), str(eq.right.name))
+                            )
 
                 # Create relationships from grouped data
                 for (left_qn, right_qn), col_pairs in table_pair_map.items():
@@ -423,19 +516,42 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
                 left_qn = _resolve_alias(left_table_alias, scope, alias_to_qualified)
                 right_qn = _resolve_alias(right_table_alias, scope, alias_to_qualified)
 
-                # Skip same-table comparisons (not joins)
-                if left_qn is not None and right_qn is not None and left_qn != right_qn:
-                    all_relationships.append(
-                        Relationship(
-                            left_table=left_qn,
-                            left_columns=[str(eq.left.name)],
-                            right_table=right_qn,
-                            right_columns=[str(eq.right.name)],
-                        )
+                # If alias resolution failed, try CTE resolution
+                left_where_tables: set[str] = set()
+                right_where_tables: set[str] = set()
+
+                if left_qn is not None:
+                    left_where_tables.add(left_qn)
+                else:
+                    # Try to resolve as CTE
+                    left_where_tables = _resolve_cte_to_base_tables(
+                        left_table_alias, scope
                     )
-                    logger.debug(
-                        f"Extracted implicit WHERE relationship: {left_qn} ↔ {right_qn}"
+
+                if right_qn is not None:
+                    right_where_tables.add(right_qn)
+                else:
+                    # Try to resolve as CTE
+                    right_where_tables = _resolve_cte_to_base_tables(
+                        right_table_alias, scope
                     )
+
+                # Create relationships for all base table combinations
+                for left_base in left_where_tables:
+                    for right_base in right_where_tables:
+                        # Skip same-table comparisons (not joins)
+                        if left_base != right_base:
+                            all_relationships.append(
+                                Relationship(
+                                    left_table=left_base,
+                                    left_columns=[str(eq.left.name)],
+                                    right_table=right_base,
+                                    right_columns=[str(eq.right.name)],
+                                )
+                            )
+                            logger.debug(
+                                f"Extracted implicit WHERE relationship: {left_base} ↔ {right_base}"
+                            )
 
     # Step 3: Deduplicate relationships
     seen_keys: set[tuple[tuple[str, tuple[str, ...]], ...]] = set()
