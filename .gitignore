@@ -10,3 +10,4 @@ __pycache__/
 .pytest_cache/
 .coverage.claude/worktrees/
 local-test.ipynb
+.claude/worktrees/
