@@ -1,0 +1,15 @@
+{%- for table in model.tables %}
+Table {{ table.qualified_name }} {
+{%- for column in table.columns %}
+  {{ column.name }} {{ column.data_type }}
+{%- endfor %}
+}
+
+{%- endfor %}
+{%- for rel in model.relationships %}
+{%- if rel.left_columns|length == 1 %}
+Ref: {{ rel.left_table }}.{{ rel.left_columns[0] }} - {{ rel.right_table }}.{{ rel.right_columns[0] }}
+{%- else %}
+Ref: ({{ rel.left_table }}.{{ rel.left_columns|join(', ' + rel.left_table + '.') }}) - ({{ rel.right_table }}.{{ rel.right_columns|join(', ' + rel.right_table + '.') }})
+{%- endif %}
+{%- endfor %}

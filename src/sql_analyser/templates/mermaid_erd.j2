@@ -1,0 +1,11 @@
+erDiagram
+{%- for table in model.tables %}
+    "{{ table.qualified_name }}" {
+{%- for column in table.columns %}
+        {{ column.data_type }} {{ column.name }}
+{%- endfor %}
+    }
+{%- endfor %}
+{%- for rel in model.relationships %}
+    "{{ rel.left_table }}" ||--|| "{{ rel.right_table }}" : "{{ rel.left_table }}.{{ rel.left_columns|join(', ' + rel.left_table + '.') }} = {{ rel.right_table }}.{{ rel.right_columns|join(', ' + rel.right_table + '.') }}"
+{%- endfor %}

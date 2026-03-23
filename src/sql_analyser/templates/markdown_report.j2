@@ -1,0 +1,24 @@
+# SQL Analysis Report
+
+## Original SQL Query
+
+```sql
+{{ sql }}
+```
+
+## Complexity Metrics
+{% if result.metrics %}
+| Metric | Value |
+|--------|-------|
+| AST Node Count | {{ result.metrics.node_count }} |
+| Scope Count | {{ result.metrics.scope_count }} |
+| Scope Types | {{ result.metrics.scope_types|join(', ') }} |
+{% else %}
+_No metrics available_
+{% endif %}
+
+## Source Data Model
+
+```mermaid
+{{ result.data_model.render_mermaid() }}
+```
