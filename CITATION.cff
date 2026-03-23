@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "SQL Analyser"
+abstract: "Deterministic source data model extraction from SQL queries. Parses SQL statements and reverse-engineers structured specifications including source tables, columns, relationships, output column lineage, complexity metrics, and measure/dimension classification."
+authors:
+  - family-names: "Poulton"
+    given-names: "Austin"
+    affiliation: "Equal Experts"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+repository-code: "https://github.com/austinpoulton/sql-analyser"
+keywords:
+  - sql
+  - data-model
+  - lineage
+  - metadata
+  - sqlglot
+  - schema-extraction
+  - data-engineering
+license: MIT
+version: 0.1.0
+date-released: 2026-03-23

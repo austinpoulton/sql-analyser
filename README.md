@@ -2,6 +2,8 @@
 
 > **Status: Early Development** — domain model and core analysis features are being implemented. The API below shows the target interface.
 
+**Author:** Austin Poulton ([Equal Experts](https://www.equalexperts.com/))
+
 Deterministic source data model extraction from SQL queries.
 
 SQL Analyser parses a SQL statement via [sqlglot](https://github.com/tobymao/sqlglot) and reverse-engineers a structured specification of the query: **source tables and columns**, **relationships**, **output column lineage**, **complexity metrics**, and **measure/dimension classification** — without executing or validating the SQL.
@@ -119,6 +121,16 @@ pip install -e /path/to/sql-analyser
 
 See [SQL-ANALYSER-SPEC.md](SQL-ANALYSER-SPEC.md) for the full functional and technical specification.
 
+
+## Author & Affiliation
+sql-analyser was created by Austin Poulton at [Equal Experts](https://www.equalexperts.com/)
+
+Equal Experts is a global network of experienced technology consultants who are passionate about making software better.
+
+## Citation
+
+If you use this software in your research or project, please cite it using the metadata in [CITATION.cff](CITATION.cff).
+
 ## Licence
 
-TBD
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
