@@ -8,6 +8,7 @@ dependencies = [
     "pydantic>=2",
     "jinja2>=3",
     "notebook>=7.5.5",
+    "pandas>=3.0.1",
 ]
 
 [project.optional-dependencies]
