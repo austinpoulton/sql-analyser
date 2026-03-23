@@ -6,9 +6,11 @@ including schemas, tables, columns, views, and their relationships.
 
 from __future__ import annotations
 
+import importlib.resources
 import warnings
 from enum import StrEnum
 
+from jinja2 import Template
 from pydantic import BaseModel, Field
 
 
@@ -118,6 +120,45 @@ class DataModel(BaseModel):
         """
         return merge_models(self, other)
 
+    def render_mermaid(self) -> str:
+        """Render DataModel as Mermaid ERD diagram.
+
+        Returns:
+            A Mermaid erDiagram string with tables, columns, and relationships.
+
+        Example:
+            >>> model = DataModel(tables=[...], relationships=[...])
+            >>> print(model.render_mermaid())
+            erDiagram
+                "users" {
+                    varchar id
+                    varchar name
+                }
+                ...
+        """
+        template_source = _load_template("mermaid_erd.j2")
+        template = Template(template_source)
+        return template.render(model=self)
+
+    def render_dbml(self) -> str:
+        """Render DataModel as DBML schema.
+
+        Returns:
+            A DBML string with table definitions and relationships.
+
+        Example:
+            >>> model = DataModel(tables=[...], relationships=[...])
+            >>> print(model.render_dbml())
+            Table users {
+              id varchar
+              name varchar
+            }
+            ...
+        """
+        template_source = _load_template("dbml.j2")
+        template = Template(template_source)
+        return template.render(model=self)
+
 
 class OutputColumn(BaseModel):
     """Lineage and classification for a SELECT output column.
@@ -163,6 +204,31 @@ class AnalysisResult(BaseModel):
     data_model: DataModel
     output_columns: list[OutputColumn] = Field(default_factory=list)
     metrics: ComplexityMetrics | None = None
+
+    def render_markdown_report(self, sql: str) -> str:
+        """Render complete analysis report as markdown.
+
+        Args:
+            sql: The original SQL query string.
+
+        Returns:
+            A markdown document with SQL, metrics, and ERD diagram.
+
+        Example:
+            >>> result = AnalysisResult(data_model=..., metrics=...)
+            >>> report = result.render_markdown_report("SELECT * FROM users")
+            >>> print(report)
+            # SQL Analysis Report
+
+            ## Original SQL Query
+            ```sql
+            SELECT * FROM users
+            ```
+            ...
+        """
+        template_source = _load_template("markdown_report.j2")
+        template = Template(template_source)
+        return template.render(result=self, sql=sql)
 
 
 def merge_columns(left: QueriedColumn, right: QueriedColumn) -> QueriedColumn:
@@ -271,3 +337,21 @@ def merge_models(left: DataModel, right: DataModel) -> DataModel:
             merged_rels.append(rel)
 
     return DataModel(tables=list(table_index.values()), relationships=merged_rels)
+
+
+def _load_template(filename: str) -> str:
+    """Load a Jinja2 template from the templates directory.
+
+    Args:
+        filename: Template filename (e.g., "mermaid_erd.j2")
+
+    Returns:
+        Template source code as string.
+    """
+    # Use importlib.resources to load templates from package
+    # This works both in development and when installed as a package
+    import sql_analyser.templates as templates_package
+
+    template_files = importlib.resources.files(templates_package)
+    template_path = template_files / filename
+    return template_path.read_text()
