@@ -20,6 +20,7 @@ from .domain import (
     QueriedTable,
     Relationship,
 )
+from .metrics import compute_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -573,8 +574,14 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
         relationships=unique_relationships,  # Deduplicated relationships
     )
 
-    # Step 5: Wrap in AnalysisResult
-    result = AnalysisResult(data_model=data_model)
+    # Step 5: Compute complexity metrics
+    metrics = compute_metrics(expression)
+    logger.debug(
+        f"Computed metrics: {metrics.node_count} nodes, {metrics.scope_count} scopes"
+    )
+
+    # Step 6: Wrap in AnalysisResult
+    result = AnalysisResult(data_model=data_model, metrics=metrics)
     logger.debug(
         f"Analysis complete: {len(data_model.tables)} tables, "
         f"{sum(len(t.columns) for t in data_model.tables)} columns"
