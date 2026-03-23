@@ -341,3 +341,68 @@ def cte_join():
         """,
         dialect="postgres",
     )
+
+
+# Phase 4: Complexity metrics fixtures
+
+
+@pytest.fixture
+def simple_query_ast():
+    """TC-004-01: Simple query AST for baseline metrics.
+
+    SQL: SELECT id, name FROM app.users WHERE active = 1
+    """
+    return sqlglot.parse_one(
+        "SELECT id, name FROM app.users WHERE active = 1", dialect="postgres"
+    )
+
+
+@pytest.fixture
+def cte_query_ast():
+    """TC-004-02: CTE query AST for scope count validation.
+
+    SQL: WITH cte AS (SELECT id FROM app.users) SELECT id FROM cte
+    """
+    return sqlglot.parse_one(
+        "WITH cte AS (SELECT id FROM app.users) SELECT id FROM cte",
+        dialect="postgres",
+    )
+
+
+@pytest.fixture
+def nested_cte_subquery_ast():
+    """TC-004-03: Nested CTEs with correlated subquery.
+
+    SQL: WITH base AS (SELECT id FROM app.users),
+              enriched AS (
+                  SELECT b.id,
+                         (SELECT MAX(score) FROM app.scores s WHERE s.user_id = b.id) AS top_score
+                  FROM base b
+              )
+         SELECT id, top_score FROM enriched
+    """
+    return sqlglot.parse_one(
+        """
+        WITH base AS (
+            SELECT id FROM app.users
+        ),
+        enriched AS (
+            SELECT b.id, (SELECT MAX(score) FROM app.scores s WHERE s.user_id = b.id) AS top_score
+            FROM base b
+        )
+        SELECT id, top_score FROM enriched
+        """,
+        dialect="postgres",
+    )
+
+
+@pytest.fixture
+def union_query_ast():
+    """TC-004-04: UNION ALL query for scope count validation.
+
+    SQL: SELECT id FROM app.table_a UNION ALL SELECT id FROM app.table_b
+    """
+    return sqlglot.parse_one(
+        "SELECT id FROM app.table_a UNION ALL SELECT id FROM app.table_b",
+        dialect="postgres",
+    )
