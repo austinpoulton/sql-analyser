@@ -1,5 +1,10 @@
 # SQL Analyser
 
+[![CI](https://github.com/austinpoulton/sql-analyser/actions/workflows/ci.yml/badge.svg)](https://github.com/austinpoulton/sql-analyser/actions/workflows/ci.yml)
+[![Security Scanning](https://github.com/austinpoulton/sql-analyser/actions/workflows/security.yml/badge.svg)](https://github.com/austinpoulton/sql-analyser/actions/workflows/security.yml)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 > **Status: Early Development** — domain model and core analysis features are being implemented. The API below shows the target interface.
 
 **Author:** Austin Poulton ([Equal Experts](https://www.equalexperts.com/))
@@ -121,6 +126,22 @@ pip install -e /path/to/sql-analyser
 
 See [SQL-ANALYSER-SPEC.md](SQL-ANALYSER-SPEC.md) for the full functional and technical specification.
 
+## Contributing
+
+We welcome contributions! Please see:
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Development setup, testing, and PR process
+- [SECURITY.md](SECURITY.md) - Security policy and vulnerability reporting
+- [RELEASING.md](RELEASING.md) - Release process documentation
+
+## CI/CD and Security
+
+SQL Analyser uses automated CI/CD with comprehensive security scanning:
+- **Continuous Integration**: Linting, type checking, and tests on Python 3.12/3.13 across Ubuntu/macOS/Windows
+- **Security Scanning**: Weekly dependency vulnerability scans (pip-audit), SAST (Bandit), and license compliance checks
+- **Automated Releases**: PyPI publishing via trusted publisher with TestPyPI validation
+- **Dependabot**: Automated dependency update PRs
+
+See the [Security tab](../../security) for scan results.
 
 ## Author & Affiliation
 sql-analyser was created by Austin Poulton at [Equal Experts](https://www.equalexperts.com/)
