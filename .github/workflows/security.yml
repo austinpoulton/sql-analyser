@@ -42,6 +42,7 @@ jobs:
           uv tool run pip-audit --format sarif --output pip-audit-report.sarif || true
 
       - name: Upload SARIF to GitHub Security
+        if: always() && hashFiles('pip-audit-report.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: pip-audit-report.sarif
