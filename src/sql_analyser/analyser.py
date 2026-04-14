@@ -335,10 +335,12 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
                             column.name if hasattr(column, "name") else column
                         )
 
-                        qn = _resolve_alias(table_alias, scope, alias_to_qualified)
-                        if qn is not None and qn in table_registry:
+                        resolved_qn = _resolve_alias(
+                            table_alias, scope, alias_to_qualified
+                        )
+                        if resolved_qn is not None and resolved_qn in table_registry:
                             _add_or_update_column(
-                                table_registry[qn], column_name, usage
+                                table_registry[resolved_qn], column_name, usage
                             )
             else:
                 # Handle other clauses (single node)
@@ -352,10 +354,12 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
                             column.name if hasattr(column, "name") else column
                         )
 
-                        qn = _resolve_alias(table_alias, scope, alias_to_qualified)
-                        if qn is not None and qn in table_registry:
+                        resolved_qn = _resolve_alias(
+                            table_alias, scope, alias_to_qualified
+                        )
+                        if resolved_qn is not None and resolved_qn in table_registry:
                             _add_or_update_column(
-                                table_registry[qn], column_name, usage
+                                table_registry[resolved_qn], column_name, usage
                             )
 
         # Handle JOIN ON clauses separately
@@ -370,10 +374,12 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
                         column.name if hasattr(column, "name") else column
                     )
 
-                    qn = _resolve_alias(table_alias, scope, alias_to_qualified)
-                    if qn is not None and qn in table_registry:
+                    resolved_qn = _resolve_alias(table_alias, scope, alias_to_qualified)
+                    if resolved_qn is not None and resolved_qn in table_registry:
                         _add_or_update_column(
-                            table_registry[qn], column_name, ColumnUsage.JOIN_ON
+                            table_registry[resolved_qn],
+                            column_name,
+                            ColumnUsage.JOIN_ON,
                         )
 
         # Handle wildcard detection (SELECT * or table.*)
@@ -397,10 +403,10 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
                     star_table = str(
                         select_expr.table if hasattr(select_expr, "table") else ""
                     )
-                    qn = _resolve_alias(star_table, scope, alias_to_qualified)
-                    if qn is not None and qn in table_registry:
-                        table_registry[qn].has_wildcard = True
-                        logger.debug(f"Flagged {qn} with qualified wildcard")
+                    resolved_qn = _resolve_alias(star_table, scope, alias_to_qualified)
+                    if resolved_qn is not None and resolved_qn in table_registry:
+                        table_registry[resolved_qn].has_wildcard = True
+                        logger.debug(f"Flagged {resolved_qn} with qualified wildcard")
 
         # Step 2d: Extract relationships from JOINs
         # Find all JOIN nodes in this scope
@@ -497,16 +503,22 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
                 # Check both operands exist and are Column instances
                 if not (hasattr(eq, "left") and hasattr(eq, "right")):
                     continue
+                # Cast eq to access .left and .right attributes safely
+                eq_expr = cast(exp.EQ, eq)
                 if not (
-                    isinstance(eq.left, exp.Column) and isinstance(eq.right, exp.Column)
+                    isinstance(eq_expr.left, exp.Column)
+                    and isinstance(eq_expr.right, exp.Column)
                 ):
                     continue
+                # Type narrowing: after isinstance checks, we know these are Columns
+                left_col = cast(exp.Column, eq_expr.left)
+                right_col = cast(exp.Column, eq_expr.right)
 
                 left_table_alias = str(
-                    eq.left.table if hasattr(eq.left, "table") else ""
+                    left_col.table if hasattr(left_col, "table") else ""
                 )
                 right_table_alias = str(
-                    eq.right.table if hasattr(eq.right, "table") else ""
+                    right_col.table if hasattr(right_col, "table") else ""
                 )
 
                 # Skip unqualified columns (likely filters, not joins)
@@ -545,9 +557,9 @@ def analyse(expression: exp.Expression) -> AnalysisResult:
                             all_relationships.append(
                                 Relationship(
                                     left_table=left_base,
-                                    left_columns=[str(eq.left.name)],
+                                    left_columns=[str(left_col.name)],
                                     right_table=right_base,
-                                    right_columns=[str(eq.right.name)],
+                                    right_columns=[str(right_col.name)],
                                 )
                             )
                             logger.debug(
