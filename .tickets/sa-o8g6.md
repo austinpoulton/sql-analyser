@@ -1,6 +1,6 @@
 ---
 id: sa-o8g6
-status: open
+status: closed
 deps: [sa-lp6u, sa-elgs]
 links: []
 created: 2026-03-25T08:34:00Z

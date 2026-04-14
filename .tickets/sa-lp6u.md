@@ -1,6 +1,6 @@
 ---
 id: sa-lp6u
-status: open
+status: closed
 deps: [sa-ipqb]
 links: []
 created: 2026-03-25T08:34:00Z
