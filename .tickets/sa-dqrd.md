@@ -1,6 +1,6 @@
 ---
 id: sa-dqrd
-status: open
+status: closed
 deps: [sa-n0n3]
 links: []
 created: 2026-03-25T08:38:21Z

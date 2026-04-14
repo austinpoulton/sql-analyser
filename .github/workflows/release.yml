@@ -1,0 +1,308 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  id-token: write  # For PyPI trusted publishing
+
+jobs:
+  validate-release:
+    name: Validate Release Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: tag_version
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$TAG_VERSION" >> $GITHUB_OUTPUT
+          echo "Tag version: $TAG_VERSION"
+
+      - name: Read version from pyproject.toml
+        id: pyproject_version
+        run: |
+          PYPROJECT_VERSION=$(grep -E '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$PYPROJECT_VERSION" >> $GITHUB_OUTPUT
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+
+      - name: Read version from CITATION.cff
+        id: citation_version
+        run: |
+          CITATION_VERSION=$(grep -E '^version: ' CITATION.cff | sed 's/version: "\(.*\)"/\1/')
+          echo "version=$CITATION_VERSION" >> $GITHUB_OUTPUT
+          echo "CITATION.cff version: $CITATION_VERSION"
+
+      - name: Compare versions
+        run: |
+          TAG_VERSION="${{ steps.tag_version.outputs.version }}"
+          PYPROJECT_VERSION="${{ steps.pyproject_version.outputs.version }}"
+          CITATION_VERSION="${{ steps.citation_version.outputs.version }}"
+
+          echo "Comparing versions:"
+          echo "  Tag:            $TAG_VERSION"
+          echo "  pyproject.toml: $PYPROJECT_VERSION"
+          echo "  CITATION.cff:   $CITATION_VERSION"
+
+          if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ] || [ "$TAG_VERSION" != "$CITATION_VERSION" ]; then
+            echo "::error::Version mismatch detected!"
+            echo "::error::Tag version ($TAG_VERSION) does not match pyproject.toml ($PYPROJECT_VERSION) or CITATION.cff ($CITATION_VERSION)"
+            exit 1
+          fi
+
+          echo "✅ All versions match: $TAG_VERSION"
+
+  build-packages:
+    name: Build Packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: validate-release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: ./.github/actions/setup-uv
+        with:
+          python-version: '3.12'
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 90
+
+  scan-artifacts:
+    name: Security Scan Artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: build-packages
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install pip-audit
+        run: uv tool install pip-audit
+
+      - name: Scan wheel for vulnerabilities
+        run: |
+          WHEEL_FILE=$(ls dist/*.whl | head -n 1)
+          echo "Scanning $WHEEL_FILE for vulnerabilities..."
+          uv tool run pip-audit --desc "$WHEEL_FILE"
+
+  test-installation:
+    name: Test Installation (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: scan-artifacts
+    strategy:
+      matrix:
+        python-version: ['3.12', '3.13']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Create clean virtualenv and install wheel
+        run: |
+          uv venv .venv-test
+          source .venv-test/bin/activate
+          WHEEL_FILE=$(ls dist/*.whl | head -n 1)
+          uv pip install "$WHEEL_FILE"
+
+      - name: Run installation smoke test
+        run: |
+          source .venv-test/bin/activate
+          python -c "
+          import sql_analyser
+          import sqlglot
+
+          # Test basic functionality
+          sql = 'SELECT * FROM orders'
+          tree = sqlglot.parse_one(sql)
+          result = sql_analyser.analyse(tree)
+
+          assert len(result.data_model.tables) == 1
+          assert result.data_model.tables[0].name == 'orders'
+
+          print(f'✅ sql-analyser v{sql_analyser.__version__} installation test passed')
+          "
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test-installation
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+      - name: Wait for package availability
+        run: sleep 30
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Test installation from TestPyPI
+        run: |
+          uv venv .venv-testpypi
+          source .venv-testpypi/bin/activate
+          uv pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ sql-analyser
+          python -c "import sql_analyser; print(f'Installed sql-analyser v{sql_analyser.__version__} from TestPyPI')"
+
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: publish-testpypi
+    environment: production
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: publish-pypi
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for changelog
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "First release - including all commits"
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            echo "Generating changelog from $PREV_TAG to ${{ github.ref_name }}"
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Write to file to preserve formatting
+          cat > release_notes.md <<EOF
+          ## What's Changed
+
+          $CHANGELOG
+
+          ## Installation
+
+          \`\`\`bash
+          pip install sql-analyser==${{ steps.version.outputs.version }}
+          \`\`\`
+
+          or with uv:
+
+          \`\`\`bash
+          uv add sql-analyser==${{ steps.version.outputs.version }}
+          \`\`\`
+
+          ## Verification
+
+          SHA256 checksums:
+          \`\`\`
+          $(cat dist/checksums.txt)
+          \`\`\`
+          EOF
+
+          cat release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release v${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/checksums.txt
+          draft: false
+          prerelease: false

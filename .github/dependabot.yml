@@ -1,0 +1,40 @@
+version: 2
+
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+    # Group production dependencies together
+    groups:
+      production:
+        patterns:
+          - "sqlglot"
+          - "pydantic"
+          - "jinja2"
+
+      dev:
+        patterns:
+          - "pytest*"
+          - "mypy"
+          - "ruff"
+          - "types-*"
+
+    # Customize commit messages
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+    # Add labels to PRs
+    labels:
+      - "dependencies"
+
+    # Auto-create PRs for security updates and minor/patch versions
+    open-pull-requests-limit: 10
+
+    # Ignore major version updates (require manual decision)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

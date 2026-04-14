@@ -1,6 +1,6 @@
 ---
 id: sa-ioyq
-status: open
+status: closed
 deps: [sa-dqrd]
 links: []
 created: 2026-03-25T08:38:21Z

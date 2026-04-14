@@ -1,6 +1,6 @@
 ---
 id: sa-yx08
-status: open
+status: closed
 deps: [sa-jvl6]
 links: []
 created: 2026-03-25T08:38:21Z

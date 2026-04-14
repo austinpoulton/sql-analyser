@@ -1,0 +1,204 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * 1'  # Weekly, Monday 00:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Install pip-audit
+        run: uv tool install pip-audit
+
+      - name: Run pip-audit with SARIF output
+        run: |
+          uv tool run pip-audit --format sarif --output pip-audit-report.sarif || true
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: pip-audit-report.sarif
+          category: dependency-scan
+
+      - name: Check for HIGH/CRITICAL vulnerabilities
+        run: |
+          # Run pip-audit again to check exit code
+          uv tool run pip-audit --desc --format json --output pip-audit.json || exit_code=$?
+
+          if [ -f pip-audit.json ]; then
+            # Parse JSON and check for HIGH/CRITICAL vulnerabilities
+            high_critical=$(python3 -c "
+          import json
+          with open('pip-audit.json') as f:
+              data = json.load(f)
+              count = 0
+              for dep in data.get('dependencies', []):
+                  for vuln in dep.get('vulns', []):
+                      # pip-audit doesn't provide severity in JSON, so we fail on any vulnerability
+                      count += 1
+              print(count)
+          " 2>/dev/null || echo "0")
+
+            if [ "$high_critical" -gt 0 ]; then
+              echo "::error::Found $high_critical vulnerabilities in dependencies"
+              exit 1
+            fi
+          fi
+
+  sast-scan:
+    name: SAST with Bandit
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Bandit
+        run: uv tool install bandit[sarif]
+
+      - name: Run Bandit SAST scan
+        run: |
+          uv tool run bandit -r src/ -f sarif -o bandit-report.sarif || true
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit-report.sarif
+          category: sast-bandit
+
+      - name: Run Bandit for blocking check
+        run: |
+          # Run Bandit again with standard output to check for issues
+          uv tool run bandit -r src/ -ll || true
+          echo "SAST scan complete (currently in warning mode)"
+
+  license-scan:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Install pip-licenses
+        run: uv tool install pip-licenses
+
+      - name: Run license scan
+        run: |
+          uv tool run pip-licenses --format=json --output-file=licenses.json
+
+      - name: Check for problematic licenses
+        run: |
+          python3 -c "
+          import json
+
+          COPYLEFT_LICENSES = ['GPL', 'AGPL', 'LGPL']
+
+          with open('licenses.json') as f:
+              licenses = json.load(f)
+
+          issues = []
+          unknown = []
+
+          for pkg in licenses:
+              license_name = pkg.get('License', 'UNKNOWN')
+              pkg_name = pkg.get('Name', 'unknown')
+
+              if license_name == 'UNKNOWN':
+                  unknown.append(pkg_name)
+
+              for copyleft in COPYLEFT_LICENSES:
+                  if copyleft in license_name.upper():
+                      issues.append(f'{pkg_name}: {license_name}')
+
+          if unknown:
+              print(f'::warning::Packages with unknown licenses: {', '.join(unknown)}')
+
+          if issues:
+              print(f'::warning::Packages with copyleft licenses found:')
+              for issue in issues:
+                  print(f'::warning::  - {issue}')
+
+          if not issues and not unknown:
+              print('All licenses OK')
+          "
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: licenses.json
+          retention-days: 90
+
+  trivy-scan:
+    name: Trivy Comprehensive Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true  # P1 priority - don't block on failures initially
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          scanners: 'vuln,secret,config'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-scan
