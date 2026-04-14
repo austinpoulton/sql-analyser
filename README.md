@@ -7,10 +7,6 @@
 
 > **Status: Early Development** — domain model and core analysis features are being implemented. The API below shows the target interface.
 
-**Author:** Austin Poulton ([Equal Experts](https://www.equalexperts.com/))
-
-Deterministic source data model extraction from SQL queries.
-
 SQL Analyser parses a SQL statement via [sqlglot](https://github.com/tobymao/sqlglot) and reverse-engineers a structured specification of the query: **source tables and columns**, **relationships**, **output column lineage**, **complexity metrics**, and **measure/dimension classification** — without executing or validating the SQL.
 
 ## Key Features
