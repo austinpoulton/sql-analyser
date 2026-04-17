@@ -406,3 +406,99 @@ def union_query_ast():
         "SELECT id FROM app.table_a UNION ALL SELECT id FROM app.table_b",
         dialect="postgres",
     )
+
+
+@pytest.fixture
+def complex_union_implicit_joins():
+    """Complex UNION query with multiple implicit joins and aggregations.
+
+    SQL: Two-part UNION query with:
+    - 5 tables each with schema qualification
+    - Multiple implicit WHERE joins
+    - Aggregations (SUM) with column expressions
+    - Complex WHERE filtering with nested conditions
+    - GROUP BY clauses
+    - Table alias in second UNION arm
+    """
+    return sqlglot.parse_one(
+        """
+        select
+          core_dims.store_dim.store_name,
+          core_dims.buyers_dim.buyer_name,
+          core_dims.product_dissection_dim.id,
+          core_dims.product_dissection_dim.dissection_name,
+          sum(core_facts.store_dissection_daily.sales)+sum(core_facts.store_dissection_daily.x_sales)
+        from
+          core_facts.store_dissection_daily,
+          core_dims.calendar_dim,
+          core_dims.product_dissection_dim,
+          core_dims.buyers_dim,
+          core_dims.store_dim
+        where
+          ( core_dims.buyers_dim.buyer_id=core_dims.product_dissection_dim.buyer_id  )
+          and  ( core_facts.store_dissection_daily.trade_date=core_dims.calendar_dim.trade_date  )
+          and  ( core_facts.store_dissection_daily.store_id=core_dims.store_dim.store_id  )
+          and  ( core_dims.product_dissection_dim.dissection_sk=core_facts.store_dissection_daily.dissection_sk  )
+          and
+          (
+           ( core_dims.calendar_dim.trade_year in  (2024, 2025)  and
+        core_dims.calendar_dim.week_no in  (20,21)   )
+           and
+           ( core_dims.calendar_dim.trade_year in  (2024, 2025)  and
+        core_dims.calendar_dim.half_year  in  (2024, 2025)   )
+           and
+           ( core_dims.calendar_dim.trade_year in  (2024, 2025)   )
+           and
+           ( core_dims.buyers_dim.product_group in  ('motors')   )
+           and
+           ( core_dims.store_dim.store_role = 'servicing'  )
+           and
+           ( core_dims.store_dim.store_num  in  (1,3,5)   )
+          )
+        group by
+          core_dims.store_dim.store_name,
+          core_dims.buyers_dim.buyer_name,
+          core_dims.product_dissection_dim.id,
+          core_dims.product_dissection_dim.dissection_name
+        UNION
+        select
+          core_dims.store_dim.store_name,
+          core_dims.buyers_dim.buyer_name,
+          core_dims.product_dissection_dim.id,
+          core_dims.product_dissection_dim.dissection_name,
+          sum(store_dissection_daily_prev_year.sales)+sum(store_dissection_daily_prev_year.x_sales)
+        from
+          core_facts.store_dissection_daily  store_dissection_daily_prev_year,
+          core_dims.calendar_dim,
+          core_dims.product_dissection_dim,
+          core_dims.buyers_dim,
+          core_dims.store_dim
+        where
+          ( core_dims.buyers_dim.buyer_id=core_dims.product_dissection_dim.buyer_id  )
+          and  ( store_dissection_daily_prev_year.trade_date=core_dims.calendar_dim.trade_date_52_weeks  )
+          and  ( store_dissection_daily_prev_year.store_id=core_dims.store_dim.store_id  )
+          and  ( core_dims.product_dissection_dim.dissection_sk=store_dissection_daily_prev_year.dissection_sk  )
+          and
+          (
+           ( core_dims.calendar_dim.trade_year in   (2024, 2025)   and
+        core_dims.calendar_dim.week_no in  (20,21)   )
+           and
+           ( core_dims.calendar_dim.trade_year in  (2024, 2025)  and
+        core_dims.calendar_dim.half_year  in  (2024, 2025)   )
+           and
+           ( core_dims.calendar_dim.trade_year in  (2024, 2025)   )
+           and
+           ( core_dims.buyers_dim.product_group in  ('motors', )   )
+           and
+           ( core_dims.store_dim.store_role = 'servicing'  )
+           and
+           ( core_dims.store_dim.store_num  in  (5,10)   )
+          )
+        group by
+          core_dims.store_dim.store_name,
+          core_dims.buyers_dim.buyer_name,
+          core_dims.product_dissection_dim.id,
+          core_dims.product_dissection_dim.dissection_name
+        """,
+        dialect="postgres",
+    )

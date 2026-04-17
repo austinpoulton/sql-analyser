@@ -461,3 +461,178 @@ def test_complex_integration(complex_integration):
 
     # name: SELECT
     assert ColumnUsage.SELECT in products_cols["name"].usages
+
+
+def test_complex_union_implicit_joins(complex_union_implicit_joins):
+    """Complex UNION query with schema-qualified tables and implicit joins.
+
+    Verifies:
+    - 5 distinct tables extracted with correct schema qualification
+    - Columns from SELECT, WHERE, and GROUP BY clauses captured
+    - Table aliases resolved correctly (store_dissection_daily_prev_year)
+    - All implicit JOIN relationships identified from WHERE equi-joins
+    - Columns used in aggregations captured
+    - Columns used in filtering (IN, =) captured
+    """
+    result = analyse(complex_union_implicit_joins)
+
+    # Verify 5 distinct tables extracted
+    assert len(result.data_model.tables) == 5
+    tables_by_qualified_name = {t.qualified_name: t for t in result.data_model.tables}
+
+    # Verify schema-qualified table names
+    assert "core_facts.store_dissection_daily" in tables_by_qualified_name
+    assert "core_dims.calendar_dim" in tables_by_qualified_name
+    assert "core_dims.product_dissection_dim" in tables_by_qualified_name
+    assert "core_dims.buyers_dim" in tables_by_qualified_name
+    assert "core_dims.store_dim" in tables_by_qualified_name
+
+    # Verify store_dissection_daily columns
+    store_dissection = tables_by_qualified_name["core_facts.store_dissection_daily"]
+    store_dissection_cols = {col.name: col for col in store_dissection.columns}
+
+    # Expected columns: sales, x_sales, trade_date, store_id, dissection_sk
+    assert "sales" in store_dissection_cols
+    assert "x_sales" in store_dissection_cols
+    assert "trade_date" in store_dissection_cols
+    assert "store_id" in store_dissection_cols
+    assert "dissection_sk" in store_dissection_cols
+
+    # Verify usages
+    assert ColumnUsage.SELECT in store_dissection_cols["sales"].usages
+    assert ColumnUsage.SELECT in store_dissection_cols["x_sales"].usages
+    assert ColumnUsage.WHERE in store_dissection_cols["trade_date"].usages
+    assert ColumnUsage.WHERE in store_dissection_cols["store_id"].usages
+    assert ColumnUsage.WHERE in store_dissection_cols["dissection_sk"].usages
+
+    # Verify calendar_dim columns
+    calendar_dim = tables_by_qualified_name["core_dims.calendar_dim"]
+    calendar_dim_cols = {col.name: col for col in calendar_dim.columns}
+
+    # Expected columns: trade_date, trade_date_52_weeks, trade_year, week_no, half_year
+    assert "trade_date" in calendar_dim_cols
+    assert "trade_date_52_weeks" in calendar_dim_cols
+    assert "trade_year" in calendar_dim_cols
+    assert "week_no" in calendar_dim_cols
+    assert "half_year" in calendar_dim_cols
+
+    # Verify usages
+    assert ColumnUsage.WHERE in calendar_dim_cols["trade_date"].usages
+    assert ColumnUsage.WHERE in calendar_dim_cols["trade_date_52_weeks"].usages
+    assert ColumnUsage.WHERE in calendar_dim_cols["trade_year"].usages
+    assert ColumnUsage.WHERE in calendar_dim_cols["week_no"].usages
+    assert ColumnUsage.WHERE in calendar_dim_cols["half_year"].usages
+
+    # Verify product_dissection_dim columns
+    product_dissection = tables_by_qualified_name["core_dims.product_dissection_dim"]
+    product_dissection_cols = {col.name: col for col in product_dissection.columns}
+
+    # Expected columns: id, dissection_name, buyer_id, dissection_sk
+    assert "id" in product_dissection_cols
+    assert "dissection_name" in product_dissection_cols
+    assert "buyer_id" in product_dissection_cols
+    assert "dissection_sk" in product_dissection_cols
+
+    # Verify usages
+    assert ColumnUsage.SELECT in product_dissection_cols["id"].usages
+    assert ColumnUsage.SELECT in product_dissection_cols["dissection_name"].usages
+    assert ColumnUsage.GROUP_BY in product_dissection_cols["id"].usages
+    assert ColumnUsage.GROUP_BY in product_dissection_cols["dissection_name"].usages
+    assert ColumnUsage.WHERE in product_dissection_cols["buyer_id"].usages
+    assert ColumnUsage.WHERE in product_dissection_cols["dissection_sk"].usages
+
+    # Verify buyers_dim columns
+    buyers_dim = tables_by_qualified_name["core_dims.buyers_dim"]
+    buyers_dim_cols = {col.name: col for col in buyers_dim.columns}
+
+    # Expected columns: buyer_name, buyer_id, product_group
+    assert "buyer_name" in buyers_dim_cols
+    assert "buyer_id" in buyers_dim_cols
+    assert "product_group" in buyers_dim_cols
+
+    # Verify usages
+    assert ColumnUsage.SELECT in buyers_dim_cols["buyer_name"].usages
+    assert ColumnUsage.GROUP_BY in buyers_dim_cols["buyer_name"].usages
+    assert ColumnUsage.WHERE in buyers_dim_cols["buyer_id"].usages
+    assert ColumnUsage.WHERE in buyers_dim_cols["product_group"].usages
+
+    # Verify store_dim columns
+    store_dim = tables_by_qualified_name["core_dims.store_dim"]
+    store_dim_cols = {col.name: col for col in store_dim.columns}
+
+    # Expected columns: store_name, store_id, store_role, store_num
+    assert "store_name" in store_dim_cols
+    assert "store_id" in store_dim_cols
+    assert "store_role" in store_dim_cols
+    assert "store_num" in store_dim_cols
+
+    # Verify usages
+    assert ColumnUsage.SELECT in store_dim_cols["store_name"].usages
+    assert ColumnUsage.GROUP_BY in store_dim_cols["store_name"].usages
+    assert ColumnUsage.WHERE in store_dim_cols["store_id"].usages
+    assert ColumnUsage.WHERE in store_dim_cols["store_role"].usages
+    assert ColumnUsage.WHERE in store_dim_cols["store_num"].usages
+
+    # Verify relationships extracted from implicit joins
+    # Note: There are 5 relationships because the UNION has different join conditions
+    # in each arm: trade_date vs trade_date_52_weeks
+    assert len(result.data_model.relationships) == 5
+
+    # Expected relationships (order-independent):
+    # 1. buyers_dim.buyer_id = product_dissection_dim.buyer_id
+    # 2. store_dissection_daily.trade_date = calendar_dim.trade_date
+    # 3. store_dissection_daily.trade_date = calendar_dim.trade_date_52_weeks
+    # 4. store_dissection_daily.store_id = store_dim.store_id
+    # 5. product_dissection_dim.dissection_sk = store_dissection_daily.dissection_sk
+
+    # Verify each relationship exists
+    buyers_product_rel = None
+    store_dissection_calendar_rels = []
+    store_dissection_store_rel = None
+    product_store_dissection_rel = None
+
+    for rel in result.data_model.relationships:
+        if "core_dims.buyers_dim" in [
+            rel.left_table,
+            rel.right_table,
+        ] and "core_dims.product_dissection_dim" in [rel.left_table, rel.right_table]:
+            buyers_product_rel = rel
+        elif "core_facts.store_dissection_daily" in [
+            rel.left_table,
+            rel.right_table,
+        ] and "core_dims.calendar_dim" in [rel.left_table, rel.right_table]:
+            store_dissection_calendar_rels.append(rel)
+        elif "core_facts.store_dissection_daily" in [
+            rel.left_table,
+            rel.right_table,
+        ] and "core_dims.store_dim" in [rel.left_table, rel.right_table]:
+            store_dissection_store_rel = rel
+        elif "core_dims.product_dissection_dim" in [
+            rel.left_table,
+            rel.right_table,
+        ] and "core_facts.store_dissection_daily" in [rel.left_table, rel.right_table]:
+            product_store_dissection_rel = rel
+
+    assert buyers_product_rel is not None
+    assert (
+        len(store_dissection_calendar_rels) == 2
+    )  # Two different calendar relationships
+    assert store_dissection_store_rel is not None
+    assert product_store_dissection_rel is not None
+
+    # Verify relationship column names
+    assert set(buyers_product_rel.left_columns) == {"buyer_id"}
+    assert set(buyers_product_rel.right_columns) == {"buyer_id"}
+
+    assert set(store_dissection_store_rel.left_columns) == {"store_id"}
+    assert set(store_dissection_store_rel.right_columns) == {"store_id"}
+
+    assert set(product_store_dissection_rel.left_columns) == {"dissection_sk"}
+    assert set(product_store_dissection_rel.right_columns) == {"dissection_sk"}
+
+    # Verify the two calendar relationships have different columns
+    calendar_right_cols = {
+        tuple(rel.right_columns) for rel in store_dissection_calendar_rels
+    }
+    assert ("trade_date",) in calendar_right_cols
+    assert ("trade_date_52_weeks",) in calendar_right_cols
